@@ -79,7 +79,7 @@ function performRightJoin(data, joinData, joinCondition, fields, table) {
 }
 
 async function executeSELECTQuery(query) {
-    const { fields, table, whereClauses, joinType, joinTable, joinCondition, groupByFields, hasAggregateWithoutGroupBy } = parseQuery(query);
+    const { fields, table, whereClauses, joinType, joinTable, joinCondition, groupByFields, hasAggregateWithoutGroupBy, orderByFields, limit } = parseQuery(query);
     let data = await readCSV(`${table}.csv`);
 
     if (joinTable && joinCondition) {
@@ -137,17 +137,50 @@ async function executeSELECTQuery(query) {
         return [result];
     } else if (groupByFields) {
         groupResults = applyGroupBy(filteredData, groupByFields, fields);
-        return groupResults;
+        let orderedResults = groupResults;
+        if (orderByFields) {
+            orderedResults = groupResults.sort((a, b) => {
+                for (let { fieldName, order } of orderByFields) {
+                    if (a[fieldName] < b[fieldName]) return order === 'ASC' ? -1 : 1;
+                    if (a[fieldName] > b[fieldName]) return order === 'ASC' ? 1 : -1;
+                }
+                return 0;
+            });
+        }
+
+        if (limit !== null) {
+            orderedResults = orderedResults.slice(0, limit);
+        }
+
+        return orderedResults;
     }
     else {
+
+        let orderedResults = groupResults;
+        if (orderByFields) {
+            orderedResults = groupResults.sort((a, b) => {
+                for (let { fieldName, order } of orderByFields) {
+                    if (a[fieldName] < b[fieldName]) return order === 'ASC' ? -1 : 1;
+                    if (a[fieldName] > b[fieldName]) return order === 'ASC' ? 1 : -1;
+                }
+                return 0;
+            });
+        }
+
         // Select the specified fields
-        return filteredData.map(row => {
+        let result =  orderedResults.map(row => {
             const selectedRow = {};
             fields.forEach(field => {
                 selectedRow[field] = row[field];
             });
             return selectedRow;
         });
+
+        if (limit !== null) {
+            result = result.slice(0, limit);
+        }
+
+        return result;
     }
 
 
@@ -217,7 +250,7 @@ function applyGroupBy(data, groupByFields, aggregateFunctions) {
                 } else if (aggFunc.toUpperCase() === 'COUNT') {
                     finalGroup[func] = group.count;
                 }
-                // Additional aggregate functions can be handled here using if-else
+
             }
         });
 
