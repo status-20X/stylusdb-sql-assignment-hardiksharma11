@@ -4,6 +4,13 @@ function parseQuery(query) {
 
         query = query.trim();
 
+        //DISTINCT keyword
+        let isDistinct = false;
+        if (query.toUpperCase().includes('SELECT DISTINCT')) {
+            isDistinct = true;
+            query = query.replace('SELECT DISTINCT', 'SELECT');
+        }
+
         // Updated regex to capture LIMIT clause
         const limitRegex = /\sLIMIT\s(\d+)/i;
         const limitMatch = query.match(limitRegex);
@@ -79,7 +86,8 @@ function parseQuery(query) {
             groupByFields,
             hasAggregateWithoutGroupBy,
             orderByFields,
-            limit
+            limit,
+            isDistinct
         };
     } catch (error) {
         throw new Error(`Query parsing error: ${error.message}`);
@@ -116,12 +124,18 @@ function parseJoinClause(query) {
 function parseWhereClause(whereString) {
     const conditionRegex = /(.*?)(=|!=|>|<|>=|<=)(.*)/;
     return whereString.split(/ AND | OR /i).map(conditionString => {
-        const match = conditionString.match(conditionRegex);
-        if (match) {
-            const [, field, operator, value] = match;
-            return { field: field.trim(), operator, value: value.trim() };
+        if (conditionString.includes(' LIKE ')) {
+            const [field, pattern] = conditionString.split(/\sLIKE\s/i);
+            return { field: field.trim(), operator: 'LIKE', value: pattern.trim().replace(/^'(.*)'$/, '$1') };
         }
-        throw new Error('Invalid WHERE clause format');
+        else {
+            const match = conditionString.match(conditionRegex);
+            if (match) {
+                const [, field, operator, value] = match;
+                return { field: field.trim(), operator, value: value.trim() };
+            }
+            throw new Error('Invalid WHERE clause format');
+        }
     });
 }
 

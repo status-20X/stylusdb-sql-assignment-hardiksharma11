@@ -81,7 +81,7 @@ function performRightJoin(data, joinData, joinCondition, fields, table) {
 async function executeSELECTQuery(query) {
     try {
 
-        const { fields, table, whereClauses, joinType, joinTable, joinCondition, groupByFields, hasAggregateWithoutGroupBy, orderByFields, limit } = parseQuery(query);
+        const { fields, table, whereClauses, joinType, joinTable, joinCondition, groupByFields, hasAggregateWithoutGroupBy, orderByFields, limit, isDistinct } = parseQuery(query);
         let data = await readCSV(`${table}.csv`);
 
         if (joinTable && joinCondition) {
@@ -177,6 +177,10 @@ async function executeSELECTQuery(query) {
                 });
                 return selectedRow;
             });
+
+            if (isDistinct) {
+                result = [...new Map(result.map(item => [fields.map(field => item[field]).join('|'), item])).values()];
+            }
 
             if (limit !== null) {
                 result = result.slice(0, limit);
@@ -277,8 +281,11 @@ function evaluateCondition(row, clause) {
     const rowValue = parseValue(row[field]);
     let conditionValue = parseValue(value);
 
-    // console.log("EVALUATING", rowValue, operator, conditionValue, typeof (rowValue), typeof (conditionValue));
-
+    if (operator === 'LIKE') {
+        // Transform SQL LIKE pattern to JavaScript RegExp pattern
+        const regexPattern = '^' + clause.value.replace(/%/g, '.*') + '$';
+        return new RegExp(regexPattern, 'i').test(row[clause.field]);
+    }
     switch (operator) {
         case '=': return rowValue === conditionValue;
         case '!=': return rowValue !== conditionValue;
