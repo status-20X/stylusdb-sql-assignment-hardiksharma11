@@ -1,84 +1,89 @@
 function parseQuery(query) {
 
-    query = query.trim();
+    try {
 
-    // Updated regex to capture LIMIT clause
-    const limitRegex = /\sLIMIT\s(\d+)/i;
-    const limitMatch = query.match(limitRegex);
+        query = query.trim();
 
-    let limit = null;
-    if (limitMatch) {
-        limit = parseInt(limitMatch[1]);
-        query = query.replace(limitRegex, '');
+        // Updated regex to capture LIMIT clause
+        const limitRegex = /\sLIMIT\s(\d+)/i;
+        const limitMatch = query.match(limitRegex);
+
+        let limit = null;
+        if (limitMatch) {
+            limit = parseInt(limitMatch[1]);
+            query = query.replace(limitRegex, '');
+        }
+
+        // Updated regex to capture ORDER BY clause
+        const orderByRegex = /\sORDER BY\s(.+)/i;
+        const orderByMatch = query.match(orderByRegex);
+
+        let orderByFields = null;
+        if (orderByMatch) {
+            orderByFields = orderByMatch[1].split(',').map(field => {
+                const [fieldName, order] = field.trim().split(/\s+/);
+                return { fieldName, order: order ? order.toUpperCase() : 'ASC' };
+            });
+            query = query.replace(orderByRegex, '');
+        }
+
+        // Updated regex to capture GROUP BY clause
+        const groupByRegex = /\sGROUP BY\s(.+)/i;
+        const groupByMatch = query.match(groupByRegex);
+
+        let groupByFields = null;
+        if (groupByMatch) {
+            groupByFields = groupByMatch[1].split(',').map(field => field.trim());
+            query = query.replace(groupByRegex, '');
+        }
+
+        //WHERE clause
+        const whereSplit = query.split(/\sWHERE\s/i);
+        const queryBeforeWhere = whereSplit[0];
+        const whereClause = whereSplit.length > 1 ? whereSplit[1].trim() : null;
+
+
+        // Split the remaining query at the JOIN clause if it exists
+        const joinSplit = queryBeforeWhere.split(/\s(INNER|LEFT|RIGHT) JOIN\s/i);
+        const selectPart = joinSplit[0].trim();
+
+        // Parse the JOIN part if it exists
+        const { joinType, joinTable, joinCondition } = parseJoinClause(queryBeforeWhere);
+
+
+        // Parse the SELECT part
+        const selectRegex = /^SELECT\s(.+?)\sFROM\s(.+)/i;
+        const selectMatch = selectPart.match(selectRegex);
+        if (!selectMatch) {
+            throw new Error("Invalid SELECT clause. Ensure it follows 'SELECT field1, field2 FROM table' format.");
+        }
+
+        const [, fields, table] = selectMatch;
+
+        // Parse the WHERE part if it exists
+        let whereClauses = [];
+        if (whereClause) {
+            whereClauses = parseWhereClause(whereClause);
+        }
+
+        // Check for aggregate functions without GROUP BY
+        const hasAggregateWithoutGroupBy = checkAggregateWithoutGroupBy(query, groupByFields);
+
+        return {
+            fields: fields.split(',').map(field => field.trim()),
+            table: table.trim(),
+            whereClauses,
+            joinType,
+            joinTable,
+            joinCondition,
+            groupByFields,
+            hasAggregateWithoutGroupBy,
+            orderByFields,
+            limit
+        };
+    } catch (error) {
+        throw new Error(`Query parsing error: ${error.message}`);
     }
-
-    // Updated regex to capture ORDER BY clause
-    const orderByRegex = /\sORDER BY\s(.+)/i;
-    const orderByMatch = query.match(orderByRegex);
-
-    let orderByFields = null;
-    if (orderByMatch) {
-        orderByFields = orderByMatch[1].split(',').map(field => {
-            const [fieldName, order] = field.trim().split(/\s+/);
-            return { fieldName, order: order ? order.toUpperCase() : 'ASC' };
-        });
-        query = query.replace(orderByRegex, '');
-    }
-
-    // Updated regex to capture GROUP BY clause
-    const groupByRegex = /\sGROUP BY\s(.+)/i;
-    const groupByMatch = query.match(groupByRegex);
-
-    let groupByFields = null;
-    if (groupByMatch) {
-        groupByFields = groupByMatch[1].split(',').map(field => field.trim());
-        query = query.replace(groupByRegex, '');
-    }
-
-    //WHERE clause
-    const whereSplit = query.split(/\sWHERE\s/i);
-    const queryBeforeWhere = whereSplit[0];
-    const whereClause = whereSplit.length > 1 ? whereSplit[1].trim() : null;
-
-
-    // Split the remaining query at the JOIN clause if it exists
-    const joinSplit = queryBeforeWhere.split(/\s(INNER|LEFT|RIGHT) JOIN\s/i);
-    const selectPart = joinSplit[0].trim();
-
-    // Parse the JOIN part if it exists
-    const { joinType, joinTable, joinCondition } = parseJoinClause(queryBeforeWhere);
-
-
-    // Parse the SELECT part
-    const selectRegex = /^SELECT\s(.+?)\sFROM\s(.+)/i;
-    const selectMatch = selectPart.match(selectRegex);
-    if (!selectMatch) {
-        throw new Error('Invalid SELECT format');
-    }
-
-    const [, fields, table] = selectMatch;
-
-    // Parse the WHERE part if it exists
-    let whereClauses = [];
-    if (whereClause) {
-        whereClauses = parseWhereClause(whereClause);
-    }
-
-    // Check for aggregate functions without GROUP BY
-    const hasAggregateWithoutGroupBy = checkAggregateWithoutGroupBy(query, groupByFields);
-
-    return {
-        fields: fields.split(',').map(field => field.trim()),
-        table: table.trim(),
-        whereClauses,
-        joinType,
-        joinTable,
-        joinCondition,
-        groupByFields,
-        hasAggregateWithoutGroupBy,
-        orderByFields,
-        limit
-    };
 }
 
 function checkAggregateWithoutGroupBy(query, groupByFields) {
