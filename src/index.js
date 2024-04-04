@@ -1,4 +1,4 @@
-const { parseQuery, parseInsertQuery } = require('./queryParser');
+const { parseQuery, parseInsertQuery, parseDeleteQuery } = require('./queryParser');
 const {readCSV,writeCSV} = require('./csvReader');
 
 function performInnerJoin(data, joinData, joinCondition, fields, table) {
@@ -354,4 +354,19 @@ async function executeINSERTQuery(query) {
     };
 }
 
-module.exports = {executeSELECTQuery, executeINSERTQuery};
+async function executeDELETEQuery(query) {
+    const { table, whereClause } = parseDeleteQuery(query);
+    let data = await readCSV(`${table}.csv`);
+
+    if (whereClause.length > 0) {
+        data = data.filter(row => !whereClause.every(clause => evaluateCondition(row, clause)));
+    } else {
+        data = [];
+    }
+
+    await writeCSV(`${table}.csv`, data);
+
+    return { message: "Rows deleted successfully." };
+}
+
+module.exports = {executeSELECTQuery, executeINSERTQuery, executeDELETEQuery};
