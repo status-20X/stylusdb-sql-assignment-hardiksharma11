@@ -1,5 +1,5 @@
-const { parseQuery } = require('./queryParser');
-const readCSV = require('./csvReader');
+const { parseQuery, parseInsertQuery } = require('./queryParser');
+const {readCSV,writeCSV} = require('./csvReader');
 
 function performInnerJoin(data, joinData, joinCondition, fields, table) {
     return data.flatMap(mainRow => {
@@ -318,4 +318,40 @@ function parseValue(value) {
     return value;
 }
 
-module.exports = executeSELECTQuery;
+async function executeINSERTQuery(query) {
+    const { table, columns, values, returningColumns } = parseInsertQuery(query);
+    const data = await readCSV(`${table}.csv`);
+
+    
+    const headers = data.length > 0 ? Object.keys(data[0]) : columns;
+    const newRow = {};
+    headers.forEach(header => {
+        const columnIndex = columns.indexOf(header);
+        if (columnIndex !== -1) {
+            let value = values[columnIndex];
+            if (value.startsWith("'") && value.endsWith("'")) {
+                value = value.substring(1, value.length - 1);
+            }
+            newRow[header] = value;
+        } else {
+            newRow[header] = header === 'id' ? newId.toString() : '';
+        }
+    });
+
+    data.push(newRow);
+
+    await writeCSV(`${table}.csv`, data);
+
+    let returningResult = {};
+    if (returningColumns.length > 0) {
+        returningColumns.forEach(column => {
+            returningResult[column] = newRow[column];
+        });
+    }
+
+    return {
+        returning: returningResult
+    };
+}
+
+module.exports = {executeSELECTQuery, executeINSERTQuery};

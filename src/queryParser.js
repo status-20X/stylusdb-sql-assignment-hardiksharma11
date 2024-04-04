@@ -139,4 +139,39 @@ function parseWhereClause(whereString) {
     });
 }
 
-module.exports = { parseQuery, parseJoinClause };
+function parseInsertQuery(query) {
+    query = query.replace(/"?\w+"?\."(\w+)"?/g, '$1');
+
+    const insertRegex = /INSERT INTO "?(\w+)"?\s\(([^)]+)\)\sVALUES\s\(([^)]+)\)/i;
+    const insertMatch = query.match(insertRegex);
+
+    if (!insertMatch) {
+        throw new Error("Invalid INSERT INTO syntax.");
+    }
+
+    const [, table, columns, values] = insertMatch;
+
+    const parsedColumns = columns.split(',').map((name) => {
+        return name.trim().replace(/^"?(.+?)"?$/g, '$1');
+    });
+
+    const parsedValues = values.split(',').map((value) => {
+        return value.trim().replace(/^'(.*)'$/g, '$1').replace(/^"(.*)"$/g, '$1');
+    });
+
+    const returningMatch = query.match(/RETURNING\s(.+)$/i);
+    const returningColumns = returningMatch
+        ? returningMatch[1].split(',').map((name) => {
+            return name.trim().replace(/\w+\./g, '').replace(/^"?(.+?)"?$/g, '$1');
+        })
+        : [];
+    return {
+        type: 'INSERT',
+        table: table.trim().replace(/^"?(.+?)"?$/g, '$1'),
+        columns: parsedColumns,
+        values: parsedValues,
+        returningColumns
+    };
+}
+
+module.exports = { parseQuery, parseJoinClause, parseInsertQuery };
