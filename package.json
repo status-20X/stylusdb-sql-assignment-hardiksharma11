@@ -1,5 +1,5 @@
 {
-  "name": "stylusdb-sql",
+  "name": "stylusdb-sql-hardik",
   "version": "0.1.6",
   "description": "A minimal SQL based DB based on CSV files. For educational purposes only.",
   "main": "./src/index.js",
